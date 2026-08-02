@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH --job-name=KP_Robust_ci
+#SBATCH --output=ci_eps%a.out        # separate log per job: ci_eps0.out ... ci_eps4.out
+#SBATCH --error=ci_eps%a.err
+#SBATCH --array=0-4        # submit 5 SEPARATE jobs, each getting index 0,1,2,3,4
+#SBATCH --nodes=1          # each job runs on 1 node
+#SBATCH --ntasks=48        # each job gets 42 tasks (= 42 cores)
+#SBATCH --cpus-per-task=1  # each task uses 1 CPU
+#SBATCH --mem-per-cpu=1G
+#SBATCH --partition=default_free
+#SBATCH --time=03:00:00
+#SBATCH --account=rockhpc_kplda
+
+echo "Test job started at: $(date)"
+
+EPS_VALS=(0.00 0.05 0.10 0.20 0.25)
+EPS=${EPS_VALS[$SLURM_ARRAY_TASK_ID]}
+
+echo "eps=${EPS}"
+
+module purge
+module load R/4.5.1-gfbf-2024a
+
+Rscript sim_CIs.R ${EPS} 1000 500      # passes eps, n_iter=50, B_boot=10
+
+echo "Test job finished at: $(date)"

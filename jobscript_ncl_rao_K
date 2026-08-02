@@ -1,0 +1,27 @@
+#!/bin/bash
+#SBATCH --job-name=Wald_test1
+#SBATCH --output=runlog1.out        
+#SBATCH --error=runlog1.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=48
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=1G
+#SBATCH --partition=default_free
+#SBATCH --time=03:30:00
+#SBATCH --account=rockhpc_kplda
+
+# Log when we started
+echo "Job started at: $(date)"
+
+# TIMESTAMP for log files
+TIMESTAMP=$(date +%Y.%m.%d_%H.%M)
+logFile="log.test.${TIMESTAMP}"
+
+# Load modules
+module purge
+module load R/4.5.1-gfbf-2024a    # Check available version with: module avail R
+
+# Run your R script
+Rscript sim_rao_samplesize.R #>> $logFile 2>&1
+
+echo "Test job finished at: $(date)"

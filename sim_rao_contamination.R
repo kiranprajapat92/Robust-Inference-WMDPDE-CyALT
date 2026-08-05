@@ -47,71 +47,33 @@ cont_cells <- c(1, 2, 3)
 base_path <- "/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/"
 #base_path <- "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/"
 
-
 # =============================================================================
 # RAO-TYPE TEST STATISTICS
 # =============================================================================
-# All evaluated at theta0 — simple null hypotheses.
-# Unlike the Wald test (which needs fit_all_betas to get theta_hat), the
-# Rao test only needs U_beta(theta0), which is computed directly from
-# the empirical proportions. No numerical optimisation is required.
+# All evaluated at theta0 — simple null hypotheses. U_beta_vec and
+# K_beta_mat are sourced from the source file. No numerical
+# optimisation is required for the Rao-type test.
 
-precompute_rao_null <- function(theta0, Kvec, stress_mat, tau, ITs, beta) {
-  R <- nrow(stress_mat)
-  p_list <- vector("list", R)
-  W_list <- vector("list", R)
-  D_list <- vector("list", R)
-
-  for (i in seq_len(R)) {
-    p_list[[i]] <- p_i_theta(theta0[1], theta0[2], theta0[3],
-                             sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
-    W_list[[i]] <- W_i_theta_matrix(theta0[1], theta0[2], theta0[3],
-                                    sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
-    D_list[[i]] <- diag(p_list[[i]]^(beta - 1))
-  }
-
-  Kmat <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, beta)
+rao_H1 <- function(U, Kmat, K) {
   Kinv <- tryCatch(solve(Kmat), error = function(e) matrix(NA, 3, 3))
-
-  list(p = p_list, W = W_list, D = D_list, Kmat = Kmat, Kinv = Kinv)
+  if (any(is.na(Kinv))) return(NA)
+  K * drop(t(U) %*% Kinv %*% U)
 }
 
-# precompute for all six beta values, once — fixed since Kvec is fixed here
-precomp_list <- lapply(beta_vec, function(b)
-  precompute_rao_null(theta0, Kvec, stress_mat, tau, ITs, b))
-names(precomp_list) <- beta_labels
-
-compute_U_beta <- function(counts_list, Kvec, precomp) {
-  R <- length(counts_list)
-  K <- sum(Kvec)
-  U <- numeric(3)
-  for (i in seq_len(R)) {
-    phat_i <- counts_list[[i]] / Kvec[i]
-    U <- U + (Kvec[i]/K) * drop(t(precomp$W[[i]]) %*% precomp$D[[i]] %*%
-                                  (precomp$p[[i]] - phat_i))
-  }
-  U
-}
-
-rao_H1 <- function(U, precomp, K) {
-  if (any(is.na(precomp$Kinv))) return(NA)
-  K * drop(t(U) %*% precomp$Kinv %*% U)
-}
-
-rao_H2a <- function(U, precomp, K) {
-  k11 <- precomp$Kmat[1,1]
+rao_H2a <- function(U, Kmat, K) {
+  k11 <- Kmat[1, 1]
   if (is.na(k11) || k11 <= 0) return(NA)
   K * U[1]^2 / k11
 }
 
-rao_H2b <- function(U, precomp, K) {
-  k22 <- precomp$Kmat[2,2]
+rao_H2b <- function(U, Kmat, K) {
+  k22 <- Kmat[2, 2]
   if (is.na(k22) || k22 <= 0) return(NA)
   K * U[2]^2 / k22
 }
 
-rao_H3 <- function(U, precomp, K) {
-  Ksub  <- precomp$Kmat[1:2, 1:2]
+rao_H3 <- function(U, Kmat, K) {
+  Ksub  <- Kmat[1:2, 1:2]
   Kinv2 <- tryCatch(solve(Ksub), error = function(e) matrix(NA, 2, 2))
   if (any(is.na(Kinv2))) return(NA)
   U12 <- U[1:2]
@@ -146,23 +108,24 @@ one_rep_rao_eps <- function(rep_id, eps) {
 
   for (bi in seq_along(beta_vec)) {
 
-    precomp <- precomp_list[[bi]]
+    b    <- beta_vec[bi]
+    Kmat <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, b)
 
-    U0   <- compute_U_beta(dat0,    Kvec, precomp)
-    UH1  <- compute_U_beta(dat_H1,  Kvec, precomp)
-    UH2a <- compute_U_beta(dat_H2a, Kvec, precomp)
-    UH2b <- compute_U_beta(dat_H2b, Kvec, precomp)
-    UH3  <- compute_U_beta(dat_H3,  Kvec, precomp)
+    U0   <- U_beta_vec(theta0, dat0,    Kvec, stress_mat, tau, ITs, b)
+    UH1  <- U_beta_vec(theta0, dat_H1,  Kvec, stress_mat, tau, ITs, b)
+    UH2a <- U_beta_vec(theta0, dat_H2a, Kvec, stress_mat, tau, ITs, b)
+    UH2b <- U_beta_vec(theta0, dat_H2b, Kvec, stress_mat, tau, ITs, b)
+    UH3  <- U_beta_vec(theta0, dat_H3,  Kvec, stress_mat, tau, ITs, b)
 
-    lev_H1  <- as.numeric(rao_H1(U0,  precomp, K) > cv_H1)
-    lev_H2a <- as.numeric(rao_H2a(U0, precomp, K) > cv_H2)
-    lev_H2b <- as.numeric(rao_H2b(U0, precomp, K) > cv_H2)
-    lev_H3  <- as.numeric(rao_H3(U0,  precomp, K) > cv_H3)
+    lev_H1  <- as.numeric(rao_H1(U0,  Kmat, K) > cv_H1)
+    lev_H2a <- as.numeric(rao_H2a(U0, Kmat, K) > cv_H2)
+    lev_H2b <- as.numeric(rao_H2b(U0, Kmat, K) > cv_H2)
+    lev_H3  <- as.numeric(rao_H3(U0,  Kmat, K) > cv_H3)
 
-    pow_H1  <- as.numeric(rao_H1(UH1,  precomp, K) > cv_H1)
-    pow_H2a <- as.numeric(rao_H2a(UH2a,precomp, K) > cv_H2)
-    pow_H2b <- as.numeric(rao_H2b(UH2b,precomp, K) > cv_H2)
-    pow_H3  <- as.numeric(rao_H3(UH3,  precomp, K) > cv_H3)
+    pow_H1  <- as.numeric(rao_H1(UH1,  Kmat, K) > cv_H1)
+    pow_H2a <- as.numeric(rao_H2a(UH2a,Kmat, K) > cv_H2)
+    pow_H2b <- as.numeric(rao_H2b(UH2b,Kmat, K) > cv_H2)
+    pow_H3  <- as.numeric(rao_H3(UH3,  Kmat, K) > cv_H3)
 
     idx <- (bi - 1) * 8
     out[idx+1] <- lev_H1;  out[idx+2] <- lev_H2a
@@ -185,10 +148,11 @@ clusterExport(cl, varlist = c(
   "theta0","theta_alt_H1","theta_alt_H2a","theta_alt_H2b","theta_alt_H3",
   "tau","stress_mat","ITs","beta_vec","nb","Kvec",
   "cv_H1","cv_H2","cv_H3","cont_grp","cont_cells",
-  "precomp_list","compute_U_beta","rao_H1","rao_H2a","rao_H2b","rao_H3",
+  "rao_H1","rao_H2a","rao_H2b","rao_H3",
   "one_rep_rao_eps","gen_data_multicell","is_valid_dataset",
+  "U_beta_vec","K_beta_mat",
   "p_i_theta","W_i_theta_matrix","mu_fun","eta_fun",
-  "sbar_fun","aij_fun","interval_prob","surv_prob","K_beta_mat"
+  "sbar_fun","aij_fun","interval_prob","surv_prob"
 ))
 clusterEvalQ(cl, { library(optimx); library(MASS) })
 

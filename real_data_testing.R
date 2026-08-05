@@ -49,72 +49,59 @@ cat(sprintf("\nNull hypothesis theta0 (from pilot experiment): alpha0=%.4f, alph
 # =============================================================================
 
 wald_H1 <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-  Sig  <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-  Sinv <- tryCatch(solve(Sig), error = function(e) matrix(NA, 3, 3))
-  diff <- theta_hat - theta0
-  drop(t(diff) %*% Sinv %*% diff)
+    Sig  <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
+    Sinv <- tryCatch(solve(Sig), error = function(e) matrix(NA, 3, 3))
+    diff <- theta_hat - theta0
+    drop(t(diff) %*% Sinv %*% diff)
 }
 
 wald_H2a <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-  Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-  (theta_hat[1] - theta0[1])^2 / Sig[1,1]
+    Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
+    (theta_hat[1] - theta0[1])^2 / Sig[1,1]
 }
 
 wald_H2b <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-  Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-  (theta_hat[2] - theta0[2])^2 / Sig[2,2]
+    Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
+    (theta_hat[2] - theta0[2])^2 / Sig[2,2]
 }
 
 wald_H3 <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-  Sig   <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-  Sig22 <- Sig[1:2, 1:2]
-  Sinv2 <- tryCatch(solve(Sig22), error = function(e) matrix(NA, 2, 2))
-  diff  <- theta_hat[1:2] - theta0[1:2]
-  drop(t(diff) %*% Sinv2 %*% diff)
+    Sig   <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
+    Sig22 <- Sig[1:2, 1:2]
+    Sinv2 <- tryCatch(solve(Sig22), error = function(e) matrix(NA, 2, 2))
+    diff  <- theta_hat[1:2] - theta0[1:2]
+    drop(t(diff) %*% Sinv2 %*% diff)
 }
 
 
 # =============================================================================
-# RAO-TYPE TEST STATISTICS  (same definitions as the simulation study)
+# RAO-TYPE TEST STATISTICS  (U_beta_vec and K_beta_mat from source file)
 # =============================================================================
 
-precompute_rao_null <- function(theta0, Kvec, stress_mat, tau, ITs, beta) {
-  R <- nrow(stress_mat)
-  p_list <- vector("list", R)
-  W_list <- vector("list", R)
-  D_list <- vector("list", R)
-  for (i in seq_len(R)) {
-    p_list[[i]] <- p_i_theta(theta0[1], theta0[2], theta0[3],
-                             sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
-    W_list[[i]] <- W_i_theta_matrix(theta0[1], theta0[2], theta0[3],
-                                    sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
-    D_list[[i]] <- diag(p_list[[i]]^(beta - 1))
-  }
-  Kmat <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, beta)
-  Kinv <- tryCatch(solve(Kmat), error = function(e) matrix(NA, 3, 3))
-  list(p = p_list, W = W_list, D = D_list, Kmat = Kmat, Kinv = Kinv)
+rao_H1 <- function(U, Kmat, K) {
+    Kinv <- tryCatch(solve(Kmat), error = function(e) matrix(NA, 3, 3))
+    if (any(is.na(Kinv))) return(NA)
+    K * drop(t(U) %*% Kinv %*% U)
 }
 
-compute_U_beta <- function(counts_list, Kvec, precomp) {
-  R <- length(counts_list)
-  K <- sum(Kvec)
-  U <- numeric(3)
-  for (i in seq_len(R)) {
-    phat_i <- counts_list[[i]] / Kvec[i]
-    U <- U + (Kvec[i]/K) * drop(t(precomp$W[[i]]) %*% precomp$D[[i]] %*%
-                                  (precomp$p[[i]] - phat_i))
-  }
-  U
+rao_H2a <- function(U, Kmat, K) {
+    k11 <- Kmat[1, 1]
+    if (is.na(k11) || k11 <= 0) return(NA)
+    K * U[1]^2 / k11
 }
 
-rao_H1  <- function(U, precomp, K) K * drop(t(U) %*% precomp$Kinv %*% U)
-rao_H2a <- function(U, precomp, K) K * U[1]^2 / precomp$Kmat[1,1]
-rao_H2b <- function(U, precomp, K) K * U[2]^2 / precomp$Kmat[2,2]
-rao_H3  <- function(U, precomp, K) {
-  Ksub  <- precomp$Kmat[1:2, 1:2]
-  Kinv2 <- solve(Ksub)
-  U12   <- U[1:2]
-  K * drop(t(U12) %*% Kinv2 %*% U12)
+rao_H2b <- function(U, Kmat, K) {
+    k22 <- Kmat[2, 2]
+    if (is.na(k22) || k22 <= 0) return(NA)
+    K * U[2]^2 / k22
+}
+
+rao_H3 <- function(U, Kmat, K) {
+    Ksub  <- Kmat[1:2, 1:2]
+    Kinv2 <- tryCatch(solve(Ksub), error = function(e) matrix(NA, 2, 2))
+    if (any(is.na(Kinv2))) return(NA)
+    U12 <- U[1:2]
+    K * drop(t(U12) %*% Kinv2 %*% U12)
 }
 
 
@@ -135,42 +122,41 @@ results_wald <- data.frame()
 results_rao  <- data.frame()
 
 for (bi in seq_along(beta_vec)) {
-  
-  b   <- beta_vec[bi]
-  nm  <- if (b == 0) "MLE" else paste0("MDPDE_", b)
-  est <- estimates_all[[nm]]
-  
-  # ---- Wald-type ----
-  # ---- Wald-type ---- (corrected — no external * K)
-  W1  <- wald_H1(est,  theta0, Kvec, stress_mat, tau, ITs, b)
-  W2a <- wald_H2a(est, theta0, Kvec, stress_mat, tau, ITs, b)
-  W2b <- wald_H2b(est, theta0, Kvec, stress_mat, tau, ITs, b)
-  W3  <- wald_H3(est,  theta0, Kvec, stress_mat, tau, ITs, b)
-  
-  results_wald <- rbind(results_wald, data.frame(
-    beta = beta_labels[bi],
-    H1  = W1,  p_H1  = 1 - pchisq(W1,  df = 3),
-    H2a = W2a, p_H2a = 1 - pchisq(W2a, df = 1),
-    H2b = W2b, p_H2b = 1 - pchisq(W2b, df = 1),
-    H3  = W3,  p_H3  = 1 - pchisq(W3,  df = 2)
-  ))
-  
-  # ---- Rao-type ----
-  precomp <- precompute_rao_null(theta0, Kvec, stress_mat, tau, ITs, b)
-  U       <- compute_U_beta(data_obs, Kvec, precomp)
-  
-  R1  <- rao_H1(U,  precomp, K)
-  R2a <- rao_H2a(U, precomp, K)
-  R2b <- rao_H2b(U, precomp, K)
-  R3  <- rao_H3(U,  precomp, K)
-  
-  results_rao <- rbind(results_rao, data.frame(
-    beta = beta_labels[bi],
-    H1  = R1,  p_H1  = 1 - pchisq(R1,  df = 3),
-    H2a = R2a, p_H2a = 1 - pchisq(R2a, df = 1),
-    H2b = R2b, p_H2b = 1 - pchisq(R2b, df = 1),
-    H3  = R3,  p_H3  = 1 - pchisq(R3,  df = 2)
-  ))
+    
+    b   <- beta_vec[bi]
+    nm  <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+    est <- estimates_all[[nm]]
+    
+    # ---- Wald-type ---- (no explicit K* — already inside Sigma_hat)
+    W1  <- wald_H1(est,  theta0, Kvec, stress_mat, tau, ITs, b)
+    W2a <- wald_H2a(est, theta0, Kvec, stress_mat, tau, ITs, b)
+    W2b <- wald_H2b(est, theta0, Kvec, stress_mat, tau, ITs, b)
+    W3  <- wald_H3(est,  theta0, Kvec, stress_mat, tau, ITs, b)
+    
+    results_wald <- rbind(results_wald, data.frame(
+        beta = beta_labels[bi],
+        H1  = W1,  p_H1  = 1 - pchisq(W1,  df = 3),
+        H2a = W2a, p_H2a = 1 - pchisq(W2a, df = 1),
+        H2b = W2b, p_H2b = 1 - pchisq(W2b, df = 1),
+        H3  = W3,  p_H3  = 1 - pchisq(W3,  df = 2)
+    ))
+    
+    # ---- Rao-type ---- (U_beta_vec + K_beta_mat from source file)
+    U    <- U_beta_vec(theta0, data_obs, Kvec, stress_mat, tau, ITs, b)
+    Kmat <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, b)
+    
+    R1  <- rao_H1(U,  Kmat, K)
+    R2a <- rao_H2a(U, Kmat, K)
+    R2b <- rao_H2b(U, Kmat, K)
+    R3  <- rao_H3(U,  Kmat, K)
+    
+    results_rao <- rbind(results_rao, data.frame(
+        beta = beta_labels[bi],
+        H1  = R1,  p_H1  = 1 - pchisq(R1,  df = 3),
+        H2a = R2a, p_H2a = 1 - pchisq(R2a, df = 1),
+        H2b = R2b, p_H2b = 1 - pchisq(R2b, df = 1),
+        H3  = R3,  p_H3  = 1 - pchisq(R3,  df = 2)
+    ))
 }
 
 
@@ -179,10 +165,10 @@ for (bi in seq_along(beta_vec)) {
 # =============================================================================
 
 cat("\n=== Wald-type test statistics and p-values ===\n")
-print(results_wald, digits = 4, row.names = FALSE)
+print(results_wald, digits = 2, row.names = FALSE)
 
 cat("\n=== Rao-type test statistics and p-values ===\n")
-print(results_rao, digits = 4, row.names = FALSE)
+print(results_rao, digits = 2, row.names = FALSE)
 
 save(results_wald, results_rao, theta0, theta_true, beta_vec, beta_labels,
      file = "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/real_data_tests.RData")

@@ -180,6 +180,24 @@ Sigma_hat <- function(theta_hat, Kvec, stress_mat, tau, ITs, beta) {
   (1 / K) * Jinv %*% Kmat %*% Jinv
 }
 
+U_beta_vec <- function(theta, counts_list, Kvec, stress_mat, tau, ITs, beta) {
+  R <- nrow(stress_mat)
+  K <- sum(Kvec)
+  U <- numeric(3)
+
+  for (i in seq_len(R)) {
+    p_i    <- p_i_theta(theta[1], theta[2], theta[3],
+                        sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
+    W_i    <- W_i_theta_matrix(theta[1], theta[2], theta[3],
+                               sC = stress_mat[i,2], sF = stress_mat[i,1], tau, ITs)
+    D_i    <- diag(p_i^(beta - 1))
+    phat_i <- counts_list[[i]] / Kvec[i]
+
+    U <- U + (Kvec[i] / K) * drop(t(W_i) %*% D_i %*% (p_i - phat_i))
+  }
+  U
+}
+
 theta_ci <- function(theta_hat, Kvec, stress_mat, tau, ITs, beta, level = 0.95) {
   Sig <- Sigma_hat(theta_hat, Kvec, stress_mat, tau, ITs, beta)
   if (any(is.na(Sig))) return(matrix(NA, 3, 2))

@@ -138,6 +138,127 @@ fit_all_betas <- function(counts_list, Kvec, stress_mat, tau, ITs,
   return(estimates)
 }
 
+# ---- H2a composite: H0: alpha0 = alpha0,0, alpha1 and sigma unknown ----
+
+H_beta_objective_restricted_alpha0 <- function(par2, counts_list, Kvec, stress_mat,
+                                                tau, ITs, beta, alpha0_fixed) {
+  theta_full <- c(alpha0_fixed, par2[1], par2[2])
+  H_beta_objective(theta_full, counts_list, Kvec, stress_mat, tau, ITs, beta)
+}
+
+fit_mdpde_restricted_alpha0 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                        beta, alpha0_fixed, init = NULL) {
+  if (is.null(init)) init <- c(-1, 0.2)
+  result <- tryCatch(
+    optimx(par = init, fn = H_beta_objective_restricted_alpha0,
+           counts_list = counts_list, Kvec = Kvec, stress_mat = stress_mat,
+           tau = tau, ITs = ITs, beta = beta, alpha0_fixed = alpha0_fixed,
+           method = "Nelder-Mead", control = list(maxit = 5000, reltol = 1e-10)),
+    error = function(e) NULL)
+  if (is.null(result) || result$convcode[1] == 9999) return(rep(NA, 3))
+  par2_out <- as.numeric(result[1, 1:2])
+  if (any(is.na(par2_out))) return(rep(NA, 3))
+  return(c(alpha0_fixed, par2_out[1], par2_out[2]))
+}
+
+fit_all_betas_restricted_alpha0 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                            alpha0_fixed,
+                                            beta_vec = c(0, 0.2, 0.4, 0.6, 0.8, 1),
+                                            init = NULL) {
+  estimates    <- list()
+  current_init <- init
+  for (b in beta_vec) {
+    label <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+    est   <- fit_mdpde_restricted_alpha0(counts_list, Kvec, stress_mat, tau, ITs,
+                                         beta = b, alpha0_fixed = alpha0_fixed,
+                                         init = current_init)
+    estimates[[label]] <- est
+    if (!any(is.na(est)) && !any(abs(est) > 1e6)) current_init <- c(est[2], est[3])
+  }
+  return(estimates)
+}
+
+
+# ---- H2b composite: H0: alpha1 = alpha1,0, alpha0 and sigma unknown ----
+
+H_beta_objective_restricted_alpha1 <- function(par2, counts_list, Kvec, stress_mat,
+                                                tau, ITs, beta, alpha1_fixed) {
+  theta_full <- c(par2[1], alpha1_fixed, par2[2])
+  H_beta_objective(theta_full, counts_list, Kvec, stress_mat, tau, ITs, beta)
+}
+
+fit_mdpde_restricted_alpha1 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                        beta, alpha1_fixed, init = NULL) {
+  if (is.null(init)) init <- c(10, 0.2)
+  result <- tryCatch(
+    optimx(par = init, fn = H_beta_objective_restricted_alpha1,
+           counts_list = counts_list, Kvec = Kvec, stress_mat = stress_mat,
+           tau = tau, ITs = ITs, beta = beta, alpha1_fixed = alpha1_fixed,
+           method = "Nelder-Mead", control = list(maxit = 5000, reltol = 1e-10)),
+    error = function(e) NULL)
+  if (is.null(result) || result$convcode[1] == 9999) return(rep(NA, 3))
+  par2_out <- as.numeric(result[1, 1:2])
+  if (any(is.na(par2_out))) return(rep(NA, 3))
+  return(c(par2_out[1], alpha1_fixed, par2_out[2]))
+}
+
+fit_all_betas_restricted_alpha1 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                            alpha1_fixed,
+                                            beta_vec = c(0, 0.2, 0.4, 0.6, 0.8, 1),
+                                            init = NULL) {
+  estimates    <- list()
+  current_init <- init
+  for (b in beta_vec) {
+    label <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+    est   <- fit_mdpde_restricted_alpha1(counts_list, Kvec, stress_mat, tau, ITs,
+                                         beta = b, alpha1_fixed = alpha1_fixed,
+                                         init = current_init)
+    estimates[[label]] <- est
+    if (!any(is.na(est)) && !any(abs(est) > 1e6)) current_init <- c(est[1], est[3])
+  }
+  return(estimates)
+}
+
+# ---- H(C) composite: H0: sigma = sigma0, alpha0 and alpha1 unknown ----
+
+H_beta_objective_restricted_sigma <- function(par2, counts_list, Kvec, stress_mat,
+                                               tau, ITs, beta, sigma_fixed) {
+  theta_full <- c(par2[1], par2[2], sigma_fixed)
+  H_beta_objective(theta_full, counts_list, Kvec, stress_mat, tau, ITs, beta)
+}
+
+fit_mdpde_restricted_sigma <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                        beta, sigma_fixed, init = NULL) {
+  if (is.null(init)) init <- c(10, -1)
+  result <- tryCatch(
+    optimx(par = init, fn = H_beta_objective_restricted_sigma,
+           counts_list = counts_list, Kvec = Kvec, stress_mat = stress_mat,
+           tau = tau, ITs = ITs, beta = beta, sigma_fixed = sigma_fixed,
+           method = "Nelder-Mead", control = list(maxit = 5000, reltol = 1e-10)),
+    error = function(e) NULL)
+  if (is.null(result) || result$convcode[1] == 9999) return(rep(NA, 3))
+  par2_out <- as.numeric(result[1, 1:2])
+  if (any(is.na(par2_out))) return(rep(NA, 3))
+  return(c(par2_out[1], par2_out[2], sigma_fixed))
+}
+
+fit_all_betas_restricted_sigma <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                            sigma_fixed,
+                                            beta_vec = c(0, 0.2, 0.4, 0.6, 0.8, 1),
+                                            init = NULL) {
+  estimates    <- list()
+  current_init <- init
+  for (b in beta_vec) {
+    label <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+    est   <- fit_mdpde_restricted_sigma(counts_list, Kvec, stress_mat, tau, ITs,
+                                        beta = b, sigma_fixed = sigma_fixed,
+                                        init = current_init)
+    estimates[[label]] <- est
+    if (!any(is.na(est)) && !any(abs(est) > 1e6)) current_init <- c(est[1], est[2])
+  }
+  return(estimates)
+}
+
 # =============================================================================
 # ASYMPTOTIC COVARIANCE
 # =============================================================================

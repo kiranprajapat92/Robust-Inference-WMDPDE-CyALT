@@ -59,8 +59,9 @@ fit_all_betas_restricted_alpha1 <- function(counts_list, Kvec, stress_mat, tau, 
 }
 
 
-##### reconstruct theta_true and data_obs exactly as in real_data_analysis1.R
+############### reconstruct theta_true and data_obs ##############
 
+      
 failure_times <- c(26763, 31959, 32887, 33069, 34019, 34924, 36754,
                    37054, 37385, 38045, 41033, 41755, 42333,
                    42818, 44638, 44867, 48364, 49767)
@@ -101,10 +102,9 @@ cat(sprintf("\nNull hypothesis theta0 (from pilot experiment): alpha0=%.4f, alph
             theta0[1], theta0[2], theta0[3]))
 
 
-# =============================================================================
-# H(A): SIMPLE NULL  theta = theta0
-# =============================================================================
+###############  H(A): SIMPLE NULL  theta = theta0 ############### 
 
+      
 wald_HA <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
     Sig  <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
     Sinv <- tryCatch(solve(Sig), error = function(e) matrix(NA, 3, 3))
@@ -119,12 +119,13 @@ rao_HA <- function(U, Kmat, K) {
 }
 
 
-# =============================================================================
-# H(B) and H(C): COMPOSITE, SCALAR CONSTRAINTS
+                     
+###############  H(B) and H(C): COMPOSITE, SCALAR CONSTRAINTS ############### 
 # H(B): alpha1 = 0    -> j = 2   (no stress effect)
 # H(C): sigma  = sigma0  -> j = 3   (shape-parameter consistency)
-# =============================================================================
 
+
+                     
 wald_composite_scalar <- function(theta_hat_unrestricted, j, null_val,
                                   Kvec, stress_mat, tau, ITs, beta) {
     Sig <- Sigma_hat(theta_hat_unrestricted, Kvec, stress_mat, tau, ITs, beta)
@@ -154,9 +155,9 @@ rao_composite_scalar <- function(theta_tilde_restricted, j,
 }
 
 
-# =============================================================================
-# FIT: unrestricted + restricted under H(B) and H(C), for all beta
-# =============================================================================
+                     
+############### FIT: unrestricted + restricted under H(B) and H(C), for all beta  ############### 
+                     
 
 beta_vec    <- c(0, 0.2, 0.4, 0.6, 0.8, 1.0)
 beta_labels <- c("MLE", "0.2", "0.4", "0.6", "0.8", "1.0")
@@ -176,9 +177,9 @@ estimates_restricted_C <- fit_all_betas_restricted_sigma(
     sigma_fixed = sigma0, beta_vec = beta_vec, init = c(10, -1))
 
 
-# =============================================================================
-# DIAGNOSTIC CHECK: confirm restricted fit under H(B) actually moved
-# =============================================================================
+                     
+###############  DIAGNOSTIC CHECK: confirm restricted fit under H(B) actually moved ############### 
+                     
 
 cat("\n=== Diagnostic: restricted fit under H(B): alpha1 = 0 ===\n")
 for (bi in seq_along(beta_vec)) {
@@ -189,10 +190,10 @@ for (bi in seq_along(beta_vec)) {
 }
 
 
-# =============================================================================
-# APPLY ALL THREE TESTS, FOR EACH BETA
-# =============================================================================
+                     
+################  APPLY ALL THREE TESTS, FOR EACH BETA ############### 
 
+                     
 K <- sum(Kvec)
 results <- data.frame()
 
@@ -236,15 +237,12 @@ for (bi in seq_along(beta_vec)) {
 }
 
 
-# =============================================================================
-# PRINT + SAVE
-# =============================================================================
 
 cat("\n=== Test statistics and p-values for H(A), H(B), H(C) ===\n")
 print(results, digits = 3, row.names = FALSE)
 
 save(results, theta0, theta_true, sigma0, alpha1_null, beta_vec, beta_labels,
-     file = "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/real_data_tests_v3_alpha1zero.RData")
+     file = "C:/Users/Kiran/WMDPDE_CyALT_lognormal/Testing/real_data_tests_v3_alpha1zero.RData")
 cat("\nSaved: real_data_tests_v3_alpha1zero.RData\n")
 
 

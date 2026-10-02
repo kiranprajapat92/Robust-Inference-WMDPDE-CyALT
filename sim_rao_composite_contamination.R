@@ -8,9 +8,8 @@ library(MASS)
 source("/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/cyalt_lognormal_WMDPDE1.R")
 
 
-# =============================================================================
-# SETUP
-# =============================================================================
+############## Simulation Setup ##########################
+
 
 theta0        <- c(5.0, -2.0, 0.5)
 theta_alt_H1  <- c(5.2, -2.2, 0.48)
@@ -34,8 +33,8 @@ cv_H3 <- qchisq(1 - alpha_level, df = 2)
 
 n_iter     <- 1000
 Kvec       <- c(120, 80)
-eps_vec    <- c(0, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15)
-ne         <- length(eps_vec)
+eps_vec <- seq(0, 0.10, length.out = 7)
+ne      <- length(eps_vec)
 cont_grp   <- 1
 cont_cells <- c(1, 2, 3)
 
@@ -45,9 +44,9 @@ H_alpha0 <- matrix(c(1, 0, 0), ncol = 1)
 H_alpha1 <- matrix(c(0, 1, 0), ncol = 1)
 
 
-# =============================================================================
-# H1, H3 — SIMPLE, unchanged
-# =============================================================================
+
+############################ H1, H3 — SIMPLE, unchanged ###############
+
 
 rao_H1 <- function(U, Kmat, K) {
   Kinv <- tryCatch(solve(Kmat), error = function(e) matrix(NA, 3, 3))
@@ -64,9 +63,8 @@ rao_H3 <- function(U, Kmat, K) {
 }
 
 
-# =============================================================================
-# H2a, H2b — COMPOSITE, corrected: everything at theta_tilde
-# =============================================================================
+#################### H2a, H2b — COMPOSITE ####################
+                    
 
 rao_composite <- function(theta_tilde, Kvec, stress_mat, tau, ITs,
                           beta, counts_list, K, H_constraint) {
@@ -90,9 +88,8 @@ rao_composite <- function(theta_tilde, Kvec, stress_mat, tau, ITs,
 }
 
 
-# =============================================================================
-# SINGLE REPLICATION
-# =============================================================================
+################### SINGLE REPLICATION #####################
+                   
 
 one_rep_eps <- function(rep_id, eps) {
 
@@ -167,9 +164,8 @@ one_rep_eps <- function(rep_id, eps) {
 }
 
 
-# =============================================================================
-# PARALLEL SETUP
-# =============================================================================
+################### PARALLEL SETUP #######################
+                   
 
 n_cores <- 48
 cl      <- makeCluster(n_cores)
@@ -195,10 +191,9 @@ clusterExport(cl, varlist = c(
 clusterEvalQ(cl, { library(optimx); library(MASS) })
 
 
-# =============================================================================
-# RUN SIMULATION
-# =============================================================================
+####################  RUN SIMULATION ####################
 
+                   
 level_eps <- array(NA, dim = c(ne, nb, 4),
                    dimnames = list(as.character(eps_vec),
                                    beta_labels, c("H1","H2a","H2b","H3")))
@@ -241,10 +236,9 @@ save(level_eps, power_eps, eps_vec, beta_vec, beta_labels, Kvec,
 stopCluster(cl)
 
 
-## =============================================================================
-## PLOTTING
-## =============================================================================
-#
+#################### PLOTTING ###################### 
+
+
 #cols <- c("#000000","#0072B2","#009E73","#D55E00","#7B2FBE","#CC79A7")
 #ltys <- rep(1, 6); lwds <- rep(1.3, 6); pchs <- c(16, 1, 2, 5, 6, 0)
 #
@@ -302,9 +296,9 @@ stopCluster(cl)
 #plot_power_eps(); dev.off()
 #cat("Figures saved.\n")
 
-# =============================================================================
-# PLOTTING — composite hypotheses only (H2a, H2b), all in one row
-# =============================================================================
+                   
+###################### PLOTTING — composite hypotheses only (H2a, H2b), all in one row ##################
+                   
 
 cols <- c("#000000","#0072B2","#009E73","#D55E00","#7B2FBE","#CC79A7")
 ltys <- rep(1, 6); lwds <- rep(1.3, 6); pchs <- c(16, 1, 2, 5, 6, 0)

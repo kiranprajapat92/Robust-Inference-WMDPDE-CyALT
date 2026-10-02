@@ -38,7 +38,7 @@ cv_H3 <- qchisq(1 - alpha_level, df = 2)
 
 n_iter     <- 1000
 Kvec       <- c(120, 80)
-eps_vec    <- c(0, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15)
+eps_vec <- seq(0, 0.10, length.out = 7)
 ne         <- length(eps_vec)
 cont_grp   <- 1
 cont_cells <- c(1, 2, 3)

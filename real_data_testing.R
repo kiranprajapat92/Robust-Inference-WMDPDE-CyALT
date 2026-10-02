@@ -2,7 +2,62 @@ rm(list = ls())
 library(optimx)
 library(MASS)
 
-source("C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/Main_codes/Testing/cyalt_lognormal_WMDPDE1.R")
+source("C:/Users/Kiran/WMDPDE_CyALT_lognormal/Testing/cyalt_lognormal_WMDPDE1.R")
+
+H_beta_objective_restricted_alpha1 <- function(par2, counts_list, Kvec, stress_mat,
+                                               tau, ITs, beta, alpha1_fixed) {
+    alpha0 <- par2[1]; sigma <- par2[2]
+    if (sigma <= 0) return(1e10)
+    if (alpha1_fixed > 0) return(1e10)   # relaxed from >= 0 to allow alpha1 = 0
+    R <- length(counts_list)
+    K <- sum(Kvec)
+    obj <- 0
+    for (i in seq_len(R)) {
+        pvec   <- p_i_theta(alpha0, alpha1_fixed, sigma,
+                            sC = stress_mat[i, 2], sF = stress_mat[i, 1], tau, ITs)
+        phat_i <- counts_list[[i]] / Kvec[i]
+        if (beta == 0) {
+            obj <- obj - (Kvec[i] / K) * sum(phat_i * log(pvec))
+        } else {
+            obj <- obj + (Kvec[i] / K) * (sum(pvec^(1 + beta)) -
+                                              (1 + 1 / beta) * sum(phat_i * pvec^beta))
+        }
+    }
+    return(obj)
+}
+
+fit_mdpde_restricted_alpha1 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                        beta, alpha1_fixed, init = NULL) {
+    if (is.null(init)) init <- c(10, 0.2)
+    result <- tryCatch(
+        optimx(par = init, fn = H_beta_objective_restricted_alpha1,
+               counts_list = counts_list, Kvec = Kvec, stress_mat = stress_mat,
+               tau = tau, ITs = ITs, beta = beta, alpha1_fixed = alpha1_fixed,
+               method = "Nelder-Mead", control = list(maxit = 5000, reltol = 1e-10)),
+        error = function(e) NULL)
+    if (is.null(result) || result$convcode[1] != 0) return(rep(NA, 3))
+    par2_out <- as.numeric(result[1, 1:2])
+    if (any(is.na(par2_out))) return(rep(NA, 3))
+    return(c(par2_out[1], alpha1_fixed, par2_out[2]))
+}
+
+fit_all_betas_restricted_alpha1 <- function(counts_list, Kvec, stress_mat, tau, ITs,
+                                            alpha1_fixed,
+                                            beta_vec = c(0, 0.2, 0.4, 0.6, 0.8, 1),
+                                            init = NULL) {
+    estimates    <- list()
+    current_init <- init
+    for (b in beta_vec) {
+        label <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+        est   <- fit_mdpde_restricted_alpha1(counts_list, Kvec, stress_mat, tau, ITs,
+                                             beta = b, alpha1_fixed = alpha1_fixed,
+                                             init = current_init)
+        estimates[[label]] <- est
+        if (!any(is.na(est)) && !any(abs(est) > 1e6)) current_init <- c(est[1], est[3])
+    }
+    return(estimates)
+}
+
 
 ##### reconstruct theta_true and data_obs exactly as in real_data_analysis1.R
 
@@ -38,138 +93,176 @@ stress_mat <- matrix(c(s_F, s_1C, s_F, s_2C), nrow = 2, byrow = TRUE)
 
 data_obs <- sim_cyalt_data_continuous(theta_true, Kvec, stress_mat, tau, ITs, seed = 125)
 
-theta0 <- theta_true   # null hypothesis: does the CyALT data support the pilot-based values?
+theta0      <- theta_true   # H(A): does the CyALT data support the pilot-based values?
+sigma0      <- theta0[3]
+alpha1_null <- 0             # H(B): stress effect exactly zero
 
 cat(sprintf("\nNull hypothesis theta0 (from pilot experiment): alpha0=%.4f, alpha1=%.4f, sigma=%.4f\n",
             theta0[1], theta0[2], theta0[3]))
 
 
 # =============================================================================
-# WALD-TYPE TEST STATISTICS  (same definitions as the simulation study)
+# H(A): SIMPLE NULL  theta = theta0
 # =============================================================================
 
-wald_H1 <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
+wald_HA <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
     Sig  <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
     Sinv <- tryCatch(solve(Sig), error = function(e) matrix(NA, 3, 3))
     diff <- theta_hat - theta0
     drop(t(diff) %*% Sinv %*% diff)
 }
 
-wald_H2a <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-    Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-    (theta_hat[1] - theta0[1])^2 / Sig[1,1]
-}
-
-wald_H2b <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-    Sig <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-    (theta_hat[2] - theta0[2])^2 / Sig[2,2]
-}
-
-wald_H3 <- function(theta_hat, theta0, Kvec, stress_mat, tau, ITs, beta) {
-    Sig   <- Sigma_hat(theta0, Kvec, stress_mat, tau, ITs, beta)
-    Sig22 <- Sig[1:2, 1:2]
-    Sinv2 <- tryCatch(solve(Sig22), error = function(e) matrix(NA, 2, 2))
-    diff  <- theta_hat[1:2] - theta0[1:2]
-    drop(t(diff) %*% Sinv2 %*% diff)
-}
-
-
-# =============================================================================
-# RAO-TYPE TEST STATISTICS  (U_beta_vec and K_beta_mat from source file)
-# =============================================================================
-
-rao_H1 <- function(U, Kmat, K) {
+rao_HA <- function(U, Kmat, K) {
     Kinv <- tryCatch(solve(Kmat), error = function(e) matrix(NA, 3, 3))
     if (any(is.na(Kinv))) return(NA)
     K * drop(t(U) %*% Kinv %*% U)
 }
 
-rao_H2a <- function(U, Kmat, K) {
-    k11 <- Kmat[1, 1]
-    if (is.na(k11) || k11 <= 0) return(NA)
-    K * U[1]^2 / k11
+
+# =============================================================================
+# H(B) and H(C): COMPOSITE, SCALAR CONSTRAINTS
+# H(B): alpha1 = 0    -> j = 2   (no stress effect)
+# H(C): sigma  = sigma0  -> j = 3   (shape-parameter consistency)
+# =============================================================================
+
+wald_composite_scalar <- function(theta_hat_unrestricted, j, null_val,
+                                  Kvec, stress_mat, tau, ITs, beta) {
+    Sig <- Sigma_hat(theta_hat_unrestricted, Kvec, stress_mat, tau, ITs, beta)
+    if (any(is.na(Sig))) return(NA)
+    sjj <- Sig[j, j]
+    if (is.na(sjj) || sjj <= 0) return(NA)
+    (theta_hat_unrestricted[j] - null_val)^2 / sjj
 }
 
-rao_H2b <- function(U, Kmat, K) {
-    k22 <- Kmat[2, 2]
-    if (is.na(k22) || k22 <= 0) return(NA)
-    K * U[2]^2 / k22
-}
-
-rao_H3 <- function(U, Kmat, K) {
-    Ksub  <- Kmat[1:2, 1:2]
-    Kinv2 <- tryCatch(solve(Ksub), error = function(e) matrix(NA, 2, 2))
-    if (any(is.na(Kinv2))) return(NA)
-    U12 <- U[1:2]
-    K * drop(t(U12) %*% Kinv2 %*% U12)
+rao_composite_scalar <- function(theta_tilde_restricted, j,
+                                 counts_list, Kvec, stress_mat, tau, ITs, beta) {
+    K    <- sum(Kvec)
+    Jmat <- J_beta_mat(theta_tilde_restricted, Kvec, stress_mat, tau, ITs, beta)
+    Jinv <- tryCatch(solve(Jmat), error = function(e) matrix(NA, 3, 3))
+    if (any(is.na(Jinv))) return(NA)
+    
+    Hvec <- rep(0, 3); Hvec[j] <- 1
+    Q    <- Jinv %*% Hvec / drop(t(Hvec) %*% Jinv %*% Hvec)   # 3x1, r=1 case
+    
+    U    <- U_beta_vec(theta_tilde_restricted, counts_list, Kvec, stress_mat, tau, ITs, beta)
+    Kmat <- K_beta_mat(theta_tilde_restricted, Kvec, stress_mat, tau, ITs, beta)
+    
+    num <- drop(t(Q) %*% U)^2
+    den <- drop(t(Q) %*% Kmat %*% Q)
+    if (den <= 0) return(NA)
+    K * num / den
 }
 
 
 # =============================================================================
-# APPLY BOTH TESTS TO THE REAL DATA, FOR EACH BETA
+# FIT: unrestricted + restricted under H(B) and H(C), for all beta
 # =============================================================================
 
 beta_vec    <- c(0, 0.2, 0.4, 0.6, 0.8, 1.0)
 beta_labels <- c("MLE", "0.2", "0.4", "0.6", "0.8", "1.0")
 
-cat("\nFitting WMDPDE for all beta (needed for the Wald-type tests)...\n")
-estimates_all <- fit_all_betas(data_obs, Kvec, stress_mat, tau, ITs,
-                               beta_vec = beta_vec, init = c(10, -1, 0.2))
+cat("\nFitting unrestricted WMDPDE for all beta...\n")
+estimates_unrestricted <- fit_all_betas(data_obs, Kvec, stress_mat, tau, ITs,
+                                        beta_vec = beta_vec, init = c(10, -1, 0.2))
+
+cat("Fitting restricted WMDPDE under H(B): alpha1 = 0 (local override in effect) ...\n")
+estimates_restricted_B <- fit_all_betas_restricted_alpha1(
+    data_obs, Kvec, stress_mat, tau, ITs,
+    alpha1_fixed = alpha1_null, beta_vec = beta_vec, init = c(10, 0.2))
+
+cat("Fitting restricted WMDPDE under H(C): sigma = sigma0 ...\n")
+estimates_restricted_C <- fit_all_betas_restricted_sigma(
+    data_obs, Kvec, stress_mat, tau, ITs,
+    sigma_fixed = sigma0, beta_vec = beta_vec, init = c(10, -1))
+
+
+# =============================================================================
+# DIAGNOSTIC CHECK: confirm restricted fit under H(B) actually moved
+# =============================================================================
+
+cat("\n=== Diagnostic: restricted fit under H(B): alpha1 = 0 ===\n")
+for (bi in seq_along(beta_vec)) {
+    b  <- beta_vec[bi]
+    nm <- if (b == 0) "MLE" else paste0("MDPDE_", b)
+    tt <- estimates_restricted_B[[nm]]
+    cat(sprintf("beta=%.1f  theta_tilde=(%.4f, %.4f, %.4f)\n", b, tt[1], tt[2], tt[3]))
+}
+
+
+# =============================================================================
+# APPLY ALL THREE TESTS, FOR EACH BETA
+# =============================================================================
 
 K <- sum(Kvec)
-
-results_wald <- data.frame()
-results_rao  <- data.frame()
+results <- data.frame()
 
 for (bi in seq_along(beta_vec)) {
     
-    b   <- beta_vec[bi]
-    nm  <- if (b == 0) "MLE" else paste0("MDPDE_", b)
-    est <- estimates_all[[nm]]
+    b  <- beta_vec[bi]
+    nm <- if (b == 0) "MLE" else paste0("MDPDE_", b)
     
-    # ---- Wald-type ---- (no explicit K* — already inside Sigma_hat)
-    W1  <- wald_H1(est,  theta0, Kvec, stress_mat, tau, ITs, b)
-    W2a <- wald_H2a(est, theta0, Kvec, stress_mat, tau, ITs, b)
-    W2b <- wald_H2b(est, theta0, Kvec, stress_mat, tau, ITs, b)
-    W3  <- wald_H3(est,  theta0, Kvec, stress_mat, tau, ITs, b)
+    theta_hat_unr <- estimates_unrestricted[[nm]]
+    theta_tilde_B <- estimates_restricted_B[[nm]]
+    theta_tilde_C <- estimates_restricted_C[[nm]]
     
-    results_wald <- rbind(results_wald, data.frame(
+    # ---- H(A): theta = theta0 (simple) ----
+    WA     <- wald_HA(theta_hat_unr, theta0, Kvec, stress_mat, tau, ITs, b)
+    U_A    <- U_beta_vec(theta0, data_obs, Kvec, stress_mat, tau, ITs, b)
+    Kmat_A <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, b)
+    RA     <- rao_HA(U_A, Kmat_A, K)
+    
+    # ---- H(B): alpha1 = 0 (composite) ----
+    WB <- wald_composite_scalar(theta_hat_unr, j = 2, null_val = alpha1_null,
+                                Kvec, stress_mat, tau, ITs, b)
+    RB <- if (any(is.na(theta_tilde_B))) NA else
+        rao_composite_scalar(theta_tilde_B, j = 2,
+                             data_obs, Kvec, stress_mat, tau, ITs, b)
+    
+    # ---- H(C): sigma = sigma0 (composite) ----
+    WC <- wald_composite_scalar(theta_hat_unr, j = 3, null_val = sigma0,
+                                Kvec, stress_mat, tau, ITs, b)
+    RC <- rao_composite_scalar(theta_tilde_C, j = 3,
+                               data_obs, Kvec, stress_mat, tau, ITs, b)
+    
+    results <- rbind(results, data.frame(
         beta = beta_labels[bi],
-        H1  = W1,  p_H1  = 1 - pchisq(W1,  df = 3),
-        H2a = W2a, p_H2a = 1 - pchisq(W2a, df = 1),
-        H2b = W2b, p_H2b = 1 - pchisq(W2b, df = 1),
-        H3  = W3,  p_H3  = 1 - pchisq(W3,  df = 2)
-    ))
-    
-    # ---- Rao-type ---- (U_beta_vec + K_beta_mat from source file)
-    U    <- U_beta_vec(theta0, data_obs, Kvec, stress_mat, tau, ITs, b)
-    Kmat <- K_beta_mat(theta0, Kvec, stress_mat, tau, ITs, b)
-    
-    R1  <- rao_H1(U,  Kmat, K)
-    R2a <- rao_H2a(U, Kmat, K)
-    R2b <- rao_H2b(U, Kmat, K)
-    R3  <- rao_H3(U,  Kmat, K)
-    
-    results_rao <- rbind(results_rao, data.frame(
-        beta = beta_labels[bi],
-        H1  = R1,  p_H1  = 1 - pchisq(R1,  df = 3),
-        H2a = R2a, p_H2a = 1 - pchisq(R2a, df = 1),
-        H2b = R2b, p_H2b = 1 - pchisq(R2b, df = 1),
-        H3  = R3,  p_H3  = 1 - pchisq(R3,  df = 2)
+        WA = WA, p_WA = 1 - pchisq(WA, df = 3),
+        RA = RA, p_RA = 1 - pchisq(RA, df = 3),
+        WB = WB, p_WB = 1 - pchisq(WB, df = 1),
+        RB = RB, p_RB = 1 - pchisq(RB, df = 1),
+        WC = WC, p_WC = 1 - pchisq(WC, df = 1),
+        RC = RC, p_RC = 1 - pchisq(RC, df = 1)
     ))
 }
 
 
 # =============================================================================
-# PRINT TABLES
+# PRINT + SAVE
 # =============================================================================
 
-cat("\n=== Wald-type test statistics and p-values ===\n")
-print(results_wald, digits = 2, row.names = FALSE)
+cat("\n=== Test statistics and p-values for H(A), H(B), H(C) ===\n")
+print(results, digits = 3, row.names = FALSE)
 
-cat("\n=== Rao-type test statistics and p-values ===\n")
-print(results_rao, digits = 2, row.names = FALSE)
+save(results, theta0, theta_true, sigma0, alpha1_null, beta_vec, beta_labels,
+     file = "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/real_data_tests_v3_alpha1zero.RData")
+cat("\nSaved: real_data_tests_v3_alpha1zero.RData\n")
 
-save(results_wald, results_rao, theta0, theta_true, beta_vec, beta_labels,
-     file = "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/real_data_tests.RData")
-cat("\nSaved: real_data_tests.RData\n")
+
+fmt_cell <- function(stat_w, stat_r, digits = 2) {
+    sprintf("%.*f (%.*f)", digits, stat_w, digits, stat_r)
+}
+fmt_p <- function(p_w, p_r, digits = 2) {
+    sprintf("%.*f (%.*f)", digits, p_w, digits, p_r)
+}
+
+results_fmt <- data.frame(
+    beta         = results$beta,
+    HA_Statistic = mapply(fmt_cell, results$WA, results$RA),
+    HA_p         = mapply(fmt_p,    results$p_WA, results$p_RA),
+    HB_Statistic = mapply(fmt_cell, results$WB, results$RB),
+    HB_p         = mapply(fmt_p,    results$p_WB, results$p_RB, digits = 3),
+    HC_Statistic = mapply(fmt_cell, results$WC, results$RC),
+    HC_p         = mapply(fmt_p,    results$p_WC, results$p_RC)
+)
+
+print(results_fmt, row.names = FALSE)

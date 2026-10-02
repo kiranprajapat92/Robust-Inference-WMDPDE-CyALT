@@ -11,10 +11,8 @@ source("/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/cyalt_lognorm
 
 n_cores <- 48
 
+################## SIMULATION SETUP #######################
 
-# =============================================================================
-# SETUP
-# =============================================================================
 
 theta0        <- c(5.0, -2.0, 0.5)
 theta_alt_H1  <- c(5.2, -2.2, 0.48)
@@ -47,9 +45,10 @@ cont_cells <- c(1, 2, 3)
 base_path <- "/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/"
 #base_path <- "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/"
 
-# =============================================================================
-# RAO-TYPE TEST STATISTICS
-# =============================================================================
+
+################## RAO-TYPE TEST STATISTICS ################## 
+
+
 # All evaluated at theta0 — simple null hypotheses. U_beta_vec and
 # K_beta_mat are sourced from the source file. No numerical
 # optimisation is required for the Rao-type test.
@@ -81,9 +80,8 @@ rao_H3 <- function(U, Kmat, K) {
 }
 
 
-# =============================================================================
-# SINGLE REPLICATION — varying contamination, fixed sample size
-# =============================================================================
+##################  SINGLE REPLICATION — varying contamination, fixed sample size ################## 
+                    
 
 one_rep_rao_eps <- function(rep_id, eps) {
 
@@ -157,9 +155,7 @@ clusterExport(cl, varlist = c(
 clusterEvalQ(cl, { library(optimx); library(MASS) })
 
 
-# =============================================================================
-# RUN SIMULATION
-# =============================================================================
+##################  RUN SIMULATION ################## 
 
 level_rao_eps <- array(NA, dim = c(ne, nb, 4),
                        dimnames = list(as.character(eps_vec),
@@ -217,9 +213,7 @@ cat("Final results saved.\n")
 stopCluster(cl)
 
 
-# =============================================================================
-# PLOTTING
-# =============================================================================
+##################  PLOTTING ################## 
 
 cols <- c("#000000","#0072B2","#009E73","#D55E00","#7B2FBE","#CC79A7")
 ltys <- rep(1, 6)

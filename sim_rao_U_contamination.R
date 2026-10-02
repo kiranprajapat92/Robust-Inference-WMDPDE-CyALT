@@ -5,12 +5,14 @@ library(doParallel)
 library(optimx)
 library(MASS)
 
-source("C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/Main_codes/Testing/cyalt_lognormal_WMDPDE1.R")
+source("/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/arxiv/cyalt_lognormal_WMDPDE1.R")
+#source("C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/Testing/cyalt_lognormal_WMDPDE1.R")
+
+n_cores <- 48
 
 
-# =============================================================================
-# SETUP
-# =============================================================================
+########################  SETUP  ########################  
+
 
 theta0        <- c(5.0, -2.0, 0.5)
 theta_alt_H1  <- c(5.2, -2.2, 0.48)
@@ -28,18 +30,16 @@ beta_labels <- c("MLE", "0.2", "0.4", "0.6", "0.8", "1.0")
 nb          <- length(beta_vec)
 
 Kvec       <- c(120, 80)
-eps_vec    <- c(0, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15)
+eps_vec <- seq(0, 0.10, length.out = 7)
 ne         <- length(eps_vec)
 cont_grp   <- 1
 cont_cells <- c(1, 2, 3)
 
 n_iter <- 1000
-base_path <- "C:/Users/Kiran/Downloads/WMDPDE_CyALT_lognormal/"
+base_path <- "/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/arxiv/"
 
 
-# =============================================================================
-# ONE REPLICATION — record U_beta(theta0) components under each alternative
-# =============================================================================
+########################   ONE REPLICATION — record U_beta(theta0) components under each alternative ########################  
 
 one_rep_U_check <- function(rep_id, eps) {
     
@@ -84,11 +84,9 @@ one_rep_U_check <- function(rep_id, eps) {
 }
 
 
-# =============================================================================
-# PARALLEL SETUP
-# =============================================================================
+########################  PARALLEL SETUP ########################  
 
-n_cores <- detectCores()
+
 cl      <- makeCluster(n_cores)
 registerDoParallel(cl)
 cat(sprintf("Using %d cores\n", n_cores))
@@ -105,11 +103,10 @@ clusterExport(cl, varlist = c(
 clusterEvalQ(cl, { library(optimx); library(MASS) })
 
 
-# =============================================================================
-# RUN — mean U_beta component per hypothesis, per component, per beta, per eps
-# =============================================================================
+########################  RUN  ########################  
 
 # dims: eps x beta x hypothesis x component
+
 U_mean <- array(NA, dim = c(ne, nb, 4, 3),
                 dimnames = list(as.character(eps_vec), beta_labels,
                                 c("H1","H2a","H2b","H3"),
@@ -148,10 +145,7 @@ save(U_mean, eps_vec, beta_vec, beta_labels,
 cat("Saved U_bias_check.RData\n")
 
 
-# =============================================================================
-# PLOT — for each hypothesis, show the relevant U component's mean
-# vs contamination, relative to zero (the null-consistent value)
-# =============================================================================
+########################  PLOT  ########################  
 
 cols <- c("#000000","#0072B2","#009E73","#D55E00","#7B2FBE","#CC79A7")
 pchs <- c(16, 1, 2, 5, 6, 0)

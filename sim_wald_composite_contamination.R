@@ -8,6 +8,8 @@ library(MASS)
 source("/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/cyalt_lognormal_WMDPDE1.R")
 
 
+############## Simulation set-up #############
+
 theta0        <- c(5.0, -2.0, 0.5)
 theta_alt_H1  <- c(5.2, -2.2, 0.48)
 theta_alt_H2a <- c(5.2, -2.0, 0.5)
@@ -30,7 +32,7 @@ cv_H3 <- qchisq(1 - alpha_level, df = 2)
 
 n_iter     <- 1000
 Kvec       <- c(120, 80)
-eps_vec    <- c(0, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15)
+eps_vec <- seq(0, 0.10, length.out = 7)
 ne         <- length(eps_vec)
 cont_grp   <- 1
 cont_cells <- c(1, 2, 3)
@@ -257,7 +259,7 @@ stopCluster(cl)
 #
 
 # =============================================================================
-# PLOTTING — composite hypotheses only (H2a, H2b), all in one row
+# PLOTTING Â— composite hypotheses only (H2a, H2b), all in one row
 # =============================================================================
 
 cols <- c("#000000","#0072B2","#009E73","#D55E00","#7B2FBE","#CC79A7")

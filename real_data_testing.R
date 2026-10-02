@@ -2,6 +2,7 @@ rm(list = ls())
 library(optimx)
 library(MASS)
 
+# source("/mnt/nfs/home/nkp117/largefiles/KP_Leandro_Maria_1/Testing/arxiv/cyalt_lognormal_WMDPDE1.R")
 source("C:/Users/Kiran/WMDPDE_CyALT_lognormal/Testing/cyalt_lognormal_WMDPDE1.R")
 
 H_beta_objective_restricted_alpha1 <- function(par2, counts_list, Kvec, stress_mat,
